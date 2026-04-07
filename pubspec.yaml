@@ -1,6 +1,6 @@
 name: auto_theme
 description: Automatically generate the opposite Flutter theme from the one you already designed.
-version: 0.1.0
+version: 0.1.1
 homepage: https://github.com/Sanaullah49/auto_theme
 repository: https://github.com/Sanaullah49/auto_theme
 issue_tracker: https://github.com/Sanaullah49/auto_theme/issues
@@ -12,7 +12,9 @@ topics:
 screenshots:
   - description: The example app in light mode using a single source theme.
     path: screenshots/light_mode.png
-  - description: The same example app with its dark theme generated automatically.
+  - description: Dark mode without the hardcoded-color fallback enabled.
+    path: screenshots/dark_mode_no_fallback.png
+  - description: Dark mode with the hardcoded-color fallback enabled.
     path: screenshots/dark_mode.png
 
 environment:

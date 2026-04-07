@@ -2,6 +2,18 @@ import 'package:flutter/material.dart';
 
 import 'auto_theme_controller.dart';
 
+/// Strategy used to handle colors that are hardcoded directly in widgets
+/// instead of coming from ThemeData.
+enum HardcodedColorStrategy {
+  /// Only theme-driven colors are translated.
+  none,
+
+  /// Applies an app-wide color filter when the opposite mode is active.
+  ///
+  /// This is best-effort and can affect images and branded assets.
+  colorFilter,
+}
+
 class _AutoThemeScope extends InheritedNotifier<AutoThemeController> {
   const _AutoThemeScope({
     required AutoThemeController controller,
@@ -28,9 +40,11 @@ class _AutoThemeScope extends InheritedNotifier<AutoThemeController> {
 class AutoThemeApp extends StatefulWidget {
   const AutoThemeApp({
     super.key,
-    required this.theme,
+    this.theme,
     this.oppositeTheme,
     this.initialThemeMode = ThemeMode.system,
+    this.hardcodedColorStrategy = HardcodedColorStrategy.none,
+    this.hardcodedColorFilterStrength = 1,
     this.builder,
     this.child,
   }) : _title = '',
@@ -59,9 +73,11 @@ class AutoThemeApp extends StatefulWidget {
 
   const AutoThemeApp.materialApp({
     super.key,
-    required this.theme,
+    this.theme,
     this.oppositeTheme,
     this.initialThemeMode = ThemeMode.system,
+    this.hardcodedColorStrategy = HardcodedColorStrategy.none,
+    this.hardcodedColorFilterStrength = 1,
     String title = '',
     GlobalKey<NavigatorState>? navigatorKey,
     Widget? home,
@@ -102,9 +118,16 @@ class AutoThemeApp extends StatefulWidget {
        _themeAnimationCurve = themeAnimationCurve,
        _isMaterialApp = true;
 
-  final ThemeData theme;
+  /// Source theme. If omitted, a default light Material 3 theme is used.
+  final ThemeData? theme;
   final ThemeData? oppositeTheme;
   final ThemeMode initialThemeMode;
+  final HardcodedColorStrategy hardcodedColorStrategy;
+
+  /// Blend factor between identity (0) and full fallback filter (1).
+  ///
+  /// Used only when [hardcodedColorStrategy] is [HardcodedColorStrategy.colorFilter].
+  final double hardcodedColorFilterStrength;
   final Widget Function(
     BuildContext context,
     ThemeData lightTheme,
@@ -148,12 +171,14 @@ class AutoThemeApp extends StatefulWidget {
 
 class _AutoThemeAppState extends State<AutoThemeApp> {
   late final AutoThemeController _controller;
+  late ThemeData _sourceTheme;
 
   @override
   void initState() {
     super.initState();
+    _sourceTheme = _resolveSourceTheme(widget.theme);
     _controller = AutoThemeController(
-      theme: widget.theme,
+      theme: _sourceTheme,
       oppositeTheme: widget.oppositeTheme,
       initialMode: widget.initialThemeMode,
     );
@@ -164,8 +189,9 @@ class _AutoThemeAppState extends State<AutoThemeApp> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.theme != widget.theme ||
         oldWidget.oppositeTheme != widget.oppositeTheme) {
+      _sourceTheme = _resolveSourceTheme(widget.theme);
       _controller.updateTheme(
-        widget.theme,
+        _sourceTheme,
         oppositeTheme: widget.oppositeTheme,
       );
     }
@@ -184,8 +210,10 @@ class _AutoThemeAppState extends State<AutoThemeApp> {
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
+          late final Widget appChild;
+
           if (widget._isMaterialApp) {
-            return MaterialApp(
+            appChild = MaterialApp(
               title: widget._title,
               navigatorKey: widget._navigatorKey,
               home: widget._home,
@@ -208,10 +236,8 @@ class _AutoThemeAppState extends State<AutoThemeApp> {
               themeAnimationDuration: widget._themeAnimationDuration,
               themeAnimationCurve: widget._themeAnimationCurve,
             );
-          }
-
-          if (widget.builder != null) {
-            return Builder(
+          } else if (widget.builder != null) {
+            appChild = Builder(
               builder: (innerContext) {
                 return widget.builder!(
                   innerContext,
@@ -221,11 +247,152 @@ class _AutoThemeAppState extends State<AutoThemeApp> {
                 );
               },
             );
+          } else {
+            appChild = widget.child!;
           }
 
-          return widget.child!;
+          if (widget.hardcodedColorStrategy !=
+              HardcodedColorStrategy.colorFilter) {
+            return appChild;
+          }
+
+          final shouldApplyFilter = _shouldApplyHardcodedColorFilter(context);
+          if (!shouldApplyFilter) {
+            return appChild;
+          }
+
+          final sourceBrightness = _controller.sourceIsLight
+              ? Brightness.light
+              : Brightness.dark;
+          final filter = _buildHardcodedColorFilter(
+            sourceBrightness: sourceBrightness,
+            strength: widget.hardcodedColorFilterStrength,
+          );
+
+          return ColorFiltered(colorFilter: filter, child: appChild);
         },
       ),
     );
+  }
+
+  ThemeData _resolveSourceTheme(ThemeData? sourceTheme) {
+    if (sourceTheme != null) {
+      return sourceTheme;
+    }
+
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF4F46E5),
+        brightness: Brightness.light,
+      ),
+    );
+  }
+
+  bool _shouldApplyHardcodedColorFilter(BuildContext context) {
+    final sourceBrightness = _controller.sourceIsLight
+        ? Brightness.light
+        : Brightness.dark;
+    final activeBrightness = _effectiveBrightness(context);
+    return sourceBrightness != activeBrightness;
+  }
+
+  Brightness _effectiveBrightness(BuildContext context) {
+    switch (_controller.themeMode) {
+      case ThemeMode.light:
+        return Brightness.light;
+      case ThemeMode.dark:
+        return Brightness.dark;
+      case ThemeMode.system:
+        final mediaQuery = MediaQuery.maybeOf(context);
+        if (mediaQuery != null) {
+          return mediaQuery.platformBrightness;
+        }
+        return WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    }
+  }
+
+  ColorFilter _buildHardcodedColorFilter({
+    required Brightness sourceBrightness,
+    required double strength,
+  }) {
+    const identity = <double>[
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ];
+
+    const lightToDark = <double>[
+      -0.78,
+      -0.04,
+      -0.04,
+      0,
+      225,
+      -0.04,
+      -0.78,
+      -0.04,
+      0,
+      225,
+      -0.04,
+      -0.04,
+      -0.78,
+      0,
+      225,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ];
+
+    const darkToLight = <double>[
+      -0.9,
+      -0.02,
+      -0.02,
+      0,
+      245,
+      -0.02,
+      -0.9,
+      -0.02,
+      0,
+      245,
+      -0.02,
+      -0.02,
+      -0.9,
+      0,
+      245,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ];
+
+    final target = sourceBrightness == Brightness.light
+        ? lightToDark
+        : darkToLight;
+    final t = strength.clamp(0.0, 1.0);
+    final matrix = List<double>.generate(
+      identity.length,
+      (index) => identity[index] + (target[index] - identity[index]) * t,
+    );
+    return ColorFilter.matrix(matrix);
   }
 }

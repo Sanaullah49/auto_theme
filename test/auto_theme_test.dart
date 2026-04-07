@@ -67,6 +67,37 @@ void main() {
 
     expect(find.text('dark'), findsOneWidget);
   });
+
+  testWidgets('AutoThemeApp works when theme is omitted', (tester) async {
+    await tester.pumpWidget(
+      AutoThemeApp.materialApp(
+        initialThemeMode: ThemeMode.light,
+        home: const Scaffold(body: Text('fallback')),
+      ),
+    );
+
+    expect(find.text('fallback'), findsOneWidget);
+  });
+
+  testWidgets(
+    'hardcoded color filter fallback activates only in opposite mode',
+    (tester) async {
+      await tester.pumpWidget(
+        AutoThemeApp.materialApp(
+          initialThemeMode: ThemeMode.light,
+          hardcodedColorStrategy: HardcodedColorStrategy.colorFilter,
+          home: const Scaffold(body: Text('sample')),
+        ),
+      );
+
+      expect(find.byType(ColorFiltered), findsNothing);
+
+      AutoThemeApp.of(tester.element(find.byType(Scaffold))).setDark();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ColorFiltered), findsOneWidget);
+    },
+  );
 }
 
 class _Harness extends StatelessWidget {

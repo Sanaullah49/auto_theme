@@ -8,18 +8,20 @@ Build a dark theme and it generates the light theme.
 
 ## Screenshots
 
-| Light mode | Auto-generated dark mode |
-| --- | --- |
-| ![Light mode screenshot](screenshots/light_mode.png) | ![Dark mode screenshot](screenshots/dark_mode.png) |
+| Light mode | Dark mode (fallback off) | Dark mode (fallback on) |
+| --- | --- | --- |
+| ![Light mode screenshot](screenshots/light_mode.png) | ![Dark mode without hardcoded fallback](screenshots/dark_mode_no_fallback.png) | ![Dark mode with hardcoded fallback](screenshots/dark_mode.png) |
 
 ## Why use it
 
 - Start with a single `ThemeData`
+- `theme` is optional (a default Material 3 theme is used if omitted)
 - Get both `theme` and `darkTheme`
 - Works with Material 3 and `ColorScheme`
 - Includes runtime theme switching
 - Ships with a simple `MaterialApp` wrapper
 - Still lets you override the generated opposite theme when needed
+- Includes an optional hardcoded-color fallback for non-themed widgets
 
 ## Best fit
 
@@ -30,13 +32,14 @@ Build a dark theme and it generates the light theme.
 - Material component themes like `AppBarTheme`, `CardTheme`, and `InputDecorationTheme`
 
 If your widgets use lots of hardcoded colors, custom painting, or branded image
-assets, you should expect a little manual cleanup for perfect results.
+assets, you can enable a fallback color filter. It is best-effort and may also
+affect images and brand assets.
 
 ## Installation
 
 ```yaml
 dependencies:
-  auto_theme: ^0.1.0
+  auto_theme: ^0.1.1
 ```
 
 ## Quick start
@@ -68,6 +71,14 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+```
+
+You can also omit `theme`:
+
+```dart
+AutoThemeApp.materialApp(
+  home: const HomePage(),
+)
 ```
 
 That single `theme` becomes:
@@ -146,6 +157,26 @@ AutoThemeApp.materialApp(
   home: const HomePage(),
 )
 ```
+
+## Hardcoded color fallback (experimental)
+
+If your app has many hardcoded widget colors (`Container(color: ...)`,
+`TextStyle(color: ...)`) you can enable a global fallback filter:
+
+```dart
+AutoThemeApp.materialApp(
+  theme: myLightTheme, // optional
+  hardcodedColorStrategy: HardcodedColorStrategy.colorFilter,
+  hardcodedColorFilterStrength: 1.0, // 0.0 to 1.0
+  home: const HomePage(),
+)
+```
+
+How it behaves:
+
+- When the active mode matches your source mode, no global filter is applied
+- When the opposite mode is active, the fallback filter is applied app-wide
+- It is best-effort and can also alter photos, logos, and other assets
 
 ## How it works
 

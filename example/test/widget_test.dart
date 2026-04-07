@@ -9,6 +9,7 @@ void main() {
 
     expect(find.text('Auto Theme Demo'), findsOneWidget);
     expect(find.text('Current mode'), findsOneWidget);
-    expect(find.text('Controls'), findsOneWidget);
+    expect(find.text('Hardcoded color scenario'), findsOneWidget);
+    expect(find.text('Enable hardcoded-color fallback'), findsOneWidget);
   });
 }
